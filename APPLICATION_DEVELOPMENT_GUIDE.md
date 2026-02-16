@@ -14,14 +14,18 @@
 4. [Directory Structure](#directory-structure)
 5. [Setup & Installation](#setup--installation)
 6. [Running the Application](#running-the-application)
-7. [Features Overview](#features-overview)
-8. [API Documentation](#api-documentation)
-9. [Database Models](#database-models)
-10. [Authentication & Security](#authentication--security)
-11. [Development Workflow](#development-workflow)
-12. [Deployment Guide](#deployment-guide)
-13. [GitHub Branch Management](#github-branch-management)
-14. [Troubleshooting](#troubleshooting)
+7. [Authentication & Login/Register Flows](#authentication--loginregister-flows)
+8. [Features Overview](#features-overview)
+9. [API Documentation](#api-documentation)
+10. [Database Models](#database-models)
+11. [Development Modes](#development-modes)
+12. [Mobile App Details](#mobile-app-details)
+13. [Authentication & Security](#authentication--security)
+14. [Development Workflow](#development-workflow)
+15. [Deployment Guide](#deployment-guide)
+16. [GitHub Branch Management](#github-branch-management)
+17. [Troubleshooting](#troubleshooting)
+18. [Additional Resources](#additional-resources)
 
 ---
 
@@ -435,6 +439,263 @@ curl http://localhost:5000/api/health
 
 ---
 
+## 🔐 Authentication & Login/Register Flows
+
+### Architecture Overview
+The application has **separated login and registration concerns** into dedicated pages for better UX and code maintainability.
+
+### Web Frontend Authentication (React)
+
+#### **Login Page** (`frontend/src/pages/Login.js`)
+**Two Authentication Methods Available:**
+
+1. **Gmail OAuth Login**
+   - Uses Google Identity Services (free)
+   - Single-click authentication
+   - No password storage required
+   - Instant account creation if first-time user
+
+2. **Email & Password Login**
+   - Traditional email/password authentication
+   - Secure password hashing with bcryptjs
+   - JWT token generation
+   - Error messages for invalid credentials
+
+**UI Layout:**
+```
+┌──────────────────────────────────────┐
+│  Left Panel (Green #27ae60)          │
+│  - Branding: "Mana Prayanam"         │
+│  - Description & Features            │
+│  ├─────────────────────────────────┐ │
+│  │ Right Panel                     │ │
+│  │ - Title: "Welcome Back"         │ │
+│  │ - [Gmail Login Button]          │ │
+│  │ - Email Input Field             │ │
+│  │ - Password Input Field          │ │
+│  │ - [Login Button]                │ │
+│  │ - "New? Create Account >>" Link │ │
+│  └─────────────────────────────────┘ │
+└──────────────────────────────────────┘
+```
+
+**Key Features:**
+- ✅ Real-time form validation
+- ✅ Loading states
+- ✅ Error/success messaging
+- ✅ Responsive design (desktop & tablet)
+- ✅ Navigation to register page
+
+#### **Registration Page** (`frontend/src/pages/Register.js`)
+**Three Registration Methods Available:**
+
+**Tab 1: Gmail OAuth** 🔍
+```
+One-click registration with Google
+↓
+Auto-creates account
+↓
+User can add vehicle details later
+```
+
+**Tab 2: Email & Password** 📧
+```
+Form Fields:
+├─ Full Name
+├─ Email
+├─ Password
+├─ Phone Number
+├─ Company (optional)
+└─ Vehicle Details (for drivers)
+```
+
+**Tab 3: Phone OTP** 📱
+```
+Step-by-Step:
+1. Enter 10-digit phone number
+2. Click "Send OTP"
+3. Receive 6-digit code via SMS
+4. Enter OTP in form
+5. Account created automatically
+
+Timer: 5-minute countdown
+Max Attempts: 3 tries
+```
+
+**Registration Method Selector UI:**
+```
+When choosing signup method:
+┌─ Registration Method ──────────────┐
+│ ┌──────────┐  ┌──────────┐        │
+│ │ 📧 Email │  │ 📱 OTP   │        │
+│ └──────────┘  └──────────┘        │
+│                                   │
+│ Selected form appears:            │
+│ [Form fields for chosen method]   │
+└───────────────────────────────────┘
+```
+
+### Mobile App Authentication (React Native)
+
+**Same methods available:**
+- Gmail OAuth
+- Email & Password
+- Phone OTP
+
+**Mobile-Specific Implementation:**
+```
+export const LoginScreen = () => {
+  const [loginMode, setLoginMode] = useState('email'); // or 'otp'
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpTimer, setOtpTimer] = useState(0);
+  
+  // OTP countdown effect
+  useEffect(() => {
+    if (otpTimer > 0) {
+      const interval = setInterval(() => setOtpTimer(t => t - 1), 1000);
+      return () => clearInterval(interval);
+    }
+  }, [otpTimer]);
+  
+  const handleSendOTP = async () => {
+    // Call backend OTP endpoint
+    // Start 5-minute timer
+    setOtpTimer(300); // 5 minutes
+  };
+}
+```
+
+### Backend Authentication Flow
+
+**Location:** `backend/routes/auth.js`  
+**Key Services:**
+- OTP Generation & Verification
+- SMS Integration (Fast2SMS - Free tier)
+- JWT Token Creation
+- Password Hashing
+- Google OAuth Validation
+
+#### OTP Implementation Details
+
+```javascript
+// OTP Configuration
+const OTP_EXPIRY_MS = 5 * 60 * 1000;      // 5 minutes
+const MAX_OTP_ATTEMPTS = 3;               // 3 wrong tries allowed
+
+// OTP Generation
+function generateOTP() {
+  return Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit
+}
+
+// Cleanup Expired OTPs
+function cleanExpiredOTPs() {
+  const now = Date.now();
+  for (const [phone, data] of otpStore.entries()) {
+    if (now > data.expiresAt) otpStore.delete(phone);
+  }
+}
+```
+
+#### SMS Service (Free Tier)
+
+**Provider:** Fast2SMS  
+**Free Tier Features:**
+- Free credits on signup
+- OTP route is cheapest
+- Works for Indian numbers (+91)
+- API Key: Add to `.env` file
+
+**Setup:**
+```bash
+1. Visit https://www.fast2sms.com
+2. Sign up for free account
+3. Copy your API key
+4. Add to .env:
+   FAST2SMS_API_KEY=your_api_key_here
+```
+
+**Development Mode:**
+If no API key configured, OTP prints to console:
+```
+📱 [DEV MODE] OTP for +91 9876543210: 123456 (valid 5 min)
+ℹ️  To send real SMS, sign up at https://www.fast2sms.com
+```
+
+### Authentication Flow Diagram
+
+```
+USER FLOW:
+
+Login Flow:
+  User Visits App
+    ↓
+  Choose: Gmail | Email+Password
+    ↓
+  Credentials Sent to Backend
+    ↓
+  Backend Validates & Creates JWT
+    ↓
+  Token Stored in localStorage
+    ↓
+  User Redirected to Dashboard
+
+
+Registration Flow:
+  User Clicks "Create Account"
+    ↓
+  Choose Method: Gmail | Email | OTP
+    ↓
+  If Gmail:
+    Google OAuth Validation → Account Created
+  If Email:
+    Email+Password Form → Validation → Account Created
+  If OTP:
+    Phone Number → Send OTP → Verify OTP → Account Created
+    ↓
+  JWT Token Generated
+    ↓
+  User Logged In Automatically
+    ↓
+  Redirected to Profile Setup
+```
+
+### Token Management
+
+```javascript
+// JWT Token Structure
+const token = jwt.sign(
+  { 
+    userId: user._id,
+    email: user.email,
+    role: user.role 
+  },
+  process.env.JWT_SECRET,
+  { expiresIn: '30d' }  // 30-day expiration
+);
+
+// Every request header
+Authorization: Bearer <token>
+
+// Token Validation Middleware
+function verifyToken(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token' });
+  
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) return res.status(401).json({ error: 'Invalid token' });
+    req.userId = decoded.userId;
+    next();
+  });
+}
+```
+
+**Detailed Documentation:**
+- See [LOGIN_REGISTER_FLOW.md](LOGIN_REGISTER_FLOW.md) for UX design decisions
+- See [MOBILE_OTP_GUIDE.md](MOBILE_OTP_GUIDE.md) for OTP implementation details
+
+---
+
 ## ✨ Features Overview
 
 ### 1. **User Authentication** 🔐
@@ -464,6 +725,37 @@ curl http://localhost:5000/api/health
 - Profile verification
 - Contact information
 - Preferences
+- Profile image upload (base64 or URL)
+
+**Sample Profile Data:**
+```json
+{
+  "name": "Rajesh Kumar",
+  "email": "rajesh@company.com",
+  "phone": "9876543210",
+  "bio": "Friendly driver, non-smoking ride",
+  "vehicle": {
+    "number": "MH01AB1234",
+    "model": "Honda Civic",
+    "color": "Silver",
+    "capacity": 4
+  },
+  "address": {
+    "street": "123 Main St",
+    "city": "Bangalore",
+    "state": "Karnataka"
+  },
+  "preferences": {
+    "smokingAllowed": false,
+    "musicAllowed": true,
+    "petsAllowed": false
+  },
+  "rating": {
+    "average": 4.8,
+    "totalRatings": 45
+  }
+}
+```
 
 ### 4. **Real-Time Messaging** 💬
 - Socket.io powered instant messaging
@@ -996,7 +1288,350 @@ Response:
 
 ---
 
-## 🔐 Authentication & Security
+## �️ Development Modes
+
+### Demo Mode (No Database Required)
+
+The application can run in **Demo Mode** without MongoDB, allowing you to test all features instantly.
+
+**When to Use Demo Mode:**
+- ✅ Initial setup and testing
+- ✅ Building features before database is ready
+- ✅ Demonstrating features to stakeholders
+- ✅ Developing on systems without MongoDB access
+- ✅ Learning and exploration
+
+### How Demo Mode Works
+
+**Activation:**
+```bash
+# Set in .env file
+NODE_ENV=development
+
+# Or automatically for development environments
+```
+
+**Affected Endpoints:**
+
+#### 1. Authentication
+```javascript
+// Demo account (always works)
+Email: test@example.com
+Password: Test@123
+
+// Any new registration creates mock user
+// No error messages, everything succeeds
+```
+
+#### 2. Ride Operations
+```javascript
+// Create Ride (POST /api/rides/create)
+Returns mock ride with auto-generated ID:
+{
+  _id: "mock_ride_" + timestamp,
+  departure: "User Input",
+  destination: "User Input",
+  date: "User Input",
+  departureTime: "User Input",
+  vehicle: "Hyundai i20",
+  totalSeats: 4,
+  costPerPerson: 50,
+  status: "active",
+  driverInfo: { name: "Mock Driver", rating: 4.8 }
+}
+
+// Get Available Rides (GET /api/rides/available)
+Returns 3 hardcoded mock rides:
+1. Rajesh Kumar (Toyota Innova) - Whitefield → MG Road
+2. Priya Singh (Maruti Swift) - Marathahalli → Indiranagar
+3. Arjun Desai (Hyundai i20) - Indiranagar → Whitefield
+```
+
+#### 3. Booking Operations
+```javascript
+// Book Ride (POST /api/rides/:id/book)
+// Decreases available seats, adds passenger
+// Returns success message immediately
+
+// Cancel Booking (DELETE /api/rides/:id/cancel)
+// Increases available seats, removes passenger
+// Returns success immediately
+```
+
+#### 4. Payments (Demo)
+```javascript
+// Create Order without Razorpay validation
+{
+  orderId: "mock_order_" + timestamp,
+  amount: user_input,
+  currency: "INR",
+  status: "pending"
+}
+
+// Verify Payment (accepts any input)
+{
+  status: "completed",
+  message: "Payment verified (mock)"
+}
+```
+
+#### 5. Messages & Ratings (Demo)
+```javascript
+// Send Message
+Returns success with mock timestamp
+
+// Add Rating
+Accepts any rating 1-5
+Stores in memory (not persistent)
+```
+
+### Database Mode (MongoDB)
+
+**When MongoDB is available:**
+```javascript
+// NODE_ENV=production
+// MONGODB_URI=your_connection_string
+
+// All operations use real database
+// Data persists across sessions
+// Real-time collaboration possible
+```
+
+### Switching Modes
+
+**Development (Demo - No DB):**
+```bash
+# .env
+NODE_ENV=development
+```
+
+**Production (With DB):**
+```bash
+# .env
+NODE_ENV=production
+MONGODB_URI=mongodb+srv://user:pass@cluster/.../database
+MONGODB_URI=mongodb://localhost:27017/ride-share-db
+```
+
+### Testing the Demo Mode
+
+**Step 1: Make sure NODE_ENV=development in .env**
+```bash
+cd ride-share-app/backend
+cat .env | grep NODE_ENV
+# Output: NODE_ENV=development
+```
+
+**Step 2: Start Backend**
+```bash
+npm start
+# Server running on port 5000
+```
+
+**Step 3: Login with Demo Credentials**
+```
+Email: test@example.com
+Password: Test@123
+```
+
+**Step 4: Test Features**
+```
+✓ Create new ride
+✓ View available rides
+✓ Book a ride
+✓ Cancel booking
+✓ Send message
+✓ Add rating
+✓ Process payment
+```
+
+**All operations work instantly without database!**
+
+### Common Issues in Demo Mode
+
+**Issue: Getting database errors even in demo mode**
+```
+Solution: Check NODE_ENV=development is set in .env
+         Restart backend server after changing .env
+```
+
+**Issue: Data not persisting between sessions**
+```
+Expected behavior in demo mode!
+Data is stored in memory only.
+Refresh browser → demo data resets.
+To persist data: Switch to production mode with MongoDB
+```
+
+**Detailed Documentation:**
+- See [RIDE_CREATION_FIX.md](RIDE_CREATION_FIX.md) for demo mode troubleshooting
+
+---
+
+## 📱 Mobile App Details
+
+### Setup Instructions
+
+**Prerequisites:**
+- Node.js installed
+- Expo CLI: `npm install -g expo-cli`
+- Expo Go app on mobile device (free from App Store/Play Store)
+
+**Installation:**
+```bash
+cd ride-share-mobile
+
+# Install dependencies
+npm install
+
+# Create .env file
+cat > .env << EOF
+EXPO_PUBLIC_API_URL=http://your-machine-ip:5000/api
+EXPO_PUBLIC_SOCKET_URL=http://your-machine-ip:5000
+EOF
+```
+
+**Important:** Replace `your-machine-ip` with your computer's IP address (not localhost)
+```bash
+# Find your IP
+# Windows PowerShell
+ipconfig | findstr "IPv4"
+
+# macOS/Linux
+ifconfig | grep inet
+```
+
+### Running Mobile App
+
+```bash
+# Start Expo development server
+expo start
+
+# Options:
+# Press 'w' → Open in web browser
+# Press 'i' → Open in iOS simulator (Mac only)
+# Press 'a' → Open in Android emulator
+# Scan QR code → Open in Expo Go app (physical device)
+```
+
+### Mobile Screen Structure
+
+**Available Screens:**
+```
+├── LoginScreen.js
+│   ├── Email/Password Login
+│   ├── Gmail OAuth Integration
+│   └── Phone OTP Registration
+│
+├── DashboardScreen.js
+│   ├── Available Rides List
+│   ├── Quick Actions
+│   └── User Stats
+│
+├── FindRideScreen.js
+│   ├── Location Search
+│   ├── Date/Time Selection
+│   └── Ride Filtering
+│
+├── OfferRideScreen.js
+│   ├── Route Details
+│   ├── Seat Management
+│   └── Pricing
+│
+├── PaymentScreen.js
+│   ├── Razorpay Integration
+│   ├── Wallet System
+│   └── Cash Payment Option
+│
+├── RatingsScreen.js
+│   ├── Star Rating (1-5)
+│   └── Review Text
+│
+└── MessagingScreen.js
+    ├── Real-time Chat
+    └── Message History
+```
+
+### Mobile App - OTP Flow
+
+**Step-by-Step Process:**
+```
+1. User taps "Sign Up with OTP"
+   ↓
+2. Enters 10-digit phone number
+   ↓
+3. Taps "Send OTP"
+   ↓
+4. Receives SMS with 6-digit code
+   ↓
+5. Enters OTP in masked input
+   ↓
+6. 5-minute timer countdown visible
+   ↓
+7. Taps "Verify OTP"
+   ↓
+8. Account created automatically
+   ↓
+9. User logged in to dashboard
+```
+
+**UI Implementation:**
+```javascript
+// OTP Input Field
+- Masked 6-digit number input
+- Only accepts numbers (0-9)
+- Character spacing for clarity
+- Real-time validation
+
+// Timer Display
+- Format: MM:SS (e.g., 04:30)
+- Green color (#27ae60) for active
+- Disabled after countdown
+- "Resend OTP" button appears after timeout
+```
+
+### Mobile Production Build
+
+**For Android (APK):**
+```bash
+npm install -g eas-cli
+eas login
+eas init
+npm install -g @react-native-async-storage/async-storage
+eas build --platform android --profile production
+```
+
+**For iOS (IPA):**
+```bash
+eas build --platform ios --profile production
+```
+
+**Expected Output:**
+- Android: `.apk` file ready for Play Store
+- iOS: `.ipa` file ready for App Store
+
+**See [PRODUCTION_BUILD_GUIDE.md](ride-share-mobile/PRODUCTION_BUILD_GUIDE.md) for detailed steps**
+
+### Mobile-Specific Features
+
+**Real-time Updates:**
+- Socket.io integration for instant notifications
+- Message delivery indicators
+- Ride status updates
+
+**Offline Capabilities:**
+- AsyncStorage for local caching
+- Works without API connection (read-only)
+- Auto-sync when online
+
+**Push Notifications:**
+- Configured for Expo push service
+- Alerts for new messages
+- Ride updates
+
+---
+
+## �🔐 Advanced Authentication & Security
 
 ### JWT Token Flow
 
@@ -1503,6 +2138,86 @@ git push origin branch-name
 **Last Updated:** February 16, 2026  
 **Document Version:** 2.0  
 **Status:** Complete & Ready for Development
+
+---
+
+## 📚 Additional Resources
+
+### Official Documentation Files
+
+These detailed guides complement this master guide:
+
+| Document | Purpose | Location |
+|----------|---------|----------|
+| **LOGIN_REGISTER_FLOW.md** | Comprehensive login/register architecture & UX design decisions | [Read](LOGIN_REGISTER_FLOW.md) |
+| **MOBILE_OTP_GUIDE.md** | Detailed OTP implementation, SMS integration, and mobile-specific setup | [Read](MOBILE_OTP_GUIDE.md) |
+| **RIDE_CREATION_FIX.md** | Demo mode explanation, troubleshooting, and test scenarios | [Read](RIDE_CREATION_FIX.md) |
+| **MOBILE_APP_UPDATE_SUMMARY.md** | Mobile app updates, dual registration methods, method selector UI | [Read](MOBILE_APP_UPDATE_SUMMARY.md) |
+| **FEATURES_SUMMARY.md** | Feature-by-feature breakdown: Payments, Ratings, Messaging | [Read](FEATURES_SUMMARY.md) |
+| **COMPLETE_SETUP.md** | Quick start guide, current status, installation options | [Read](COMPLETE_SETUP.md) |
+| **QUICK_REFERENCE.md** | Quick commands, access points, API endpoints, key files | [Read](QUICK_REFERENCE.md) |
+
+### Key Implementation Guides
+
+**Authentication:**
+- [LOGIN_REGISTER_FLOW.md](LOGIN_REGISTER_FLOW.md) - Login/Register page architecture
+- [MOBILE_OTP_GUIDE.md](MOBILE_OTP_GUIDE.md) - OTP implementation details
+
+**Mobile Development:**
+- [MOBILE_APP_UPDATE_SUMMARY.md](MOBILE_APP_UPDATE_SUMMARY.md) - Mobile app features
+- [PRODUCTION_BUILD_GUIDE.md](ride-share-mobile/PRODUCTION_BUILD_GUIDE.md) - Mobile build & deployment
+
+**Feature Specifications:**
+- [FEATURES_SUMMARY.md](FEATURES_SUMMARY.md) - Payments, Ratings, Messaging
+
+**Troubleshooting:**
+- [RIDE_CREATION_FIX.md](RIDE_CREATION_FIX.md) - Demo mode and bug fixes
+
+### External Resources
+
+**Technology Documentation:**
+- [Express.js Docs](https://expressjs.com/) - Backend framework
+- [MongoDB Manual](https://docs.mongodb.com/manual/) - Database
+- [React Documentation](https://react.dev/) - Frontend framework
+- [React Native Docs](https://reactnative.dev/) - Mobile framework
+- [Socket.io Docs](https://socket.io/docs/) - Real-time communication
+- [JWT.io](https://jwt.io/) - JSON Web Tokens
+
+**API Integration:**
+- [Razorpay Documentation](https://razorpay.com/docs/) - Payment gateway
+- [Google OAuth](https://developers.google.com/identity) - Authentication
+- [Fast2SMS API](https://www.fast2sms.com/) - OTP/SMS service
+
+**Deployment:**
+- [Heroku Deployment](https://devcenter.heroku.com/articles/heroku-cli) - Backend hosting
+- [Vercel Docs](https://vercel.com/docs) - Frontend hosting
+- [Docker Documentation](https://docs.docker.com/) - Containerization
+- [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) - Database hosting
+
+### Project Repository
+
+**GitHub Repository:**
+- URL: https://github.com/Tkrishnaprasad/Mana-Prayanam
+- Main Branch: `main` (Production)
+- Developer Branch: `Kp-rat---2026` (Your branch)
+- Issue Tracker: [GitHub Issues](https://github.com/Tkrishnaprasad/Mana-Prayanam/issues)
+
+### Quick Links by Use Case
+
+**I want to...**
+
+| Task | Resource |
+|------|----------|
+| **Understand the architecture** | [Architecture section](#project-architecture) in this guide |
+| **Set up the project** | [Setup & Installation](#setup--installation) |
+| **Learn about authentication** | [Authentication & Login/Register Flows](#authentication--loginregister-flows) + [LOGIN_REGISTER_FLOW.md](LOGIN_REGISTER_FLOW.md) |
+| **Implement OTP** | [Development Modes - Demo Mode](#-development-modes) + [MOBILE_OTP_GUIDE.md](MOBILE_OTP_GUIDE.md) |
+| **Build mobile app** | [Mobile App Details](#-mobile-app-details) + [PRODUCTION_BUILD_GUIDE.md](ride-share-mobile/PRODUCTION_BUILD_GUIDE.md) |
+| **Add new feature** | [Development Workflow](#-development-workflow) + [Features Overview](#-features-overview) |
+| **Deploy to production** | [Deployment Guide](#-deployment-guide) |
+| **Fix errors** | [Troubleshooting](#-troubleshooting) + [RIDE_CREATION_FIX.md](RIDE_CREATION_FIX.md) |
+| **Push to GitHub** | [GitHub Branch Management](#-github-branch-management) |
+| **Test without database** | [Development Modes](#-development-modes) + [RIDE_CREATION_FIX.md](RIDE_CREATION_FIX.md) |
 
 ---
 
